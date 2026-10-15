@@ -1,0 +1,53 @@
+services:
+  moodle:
+    build: .
+    restart: unless-stopped
+    environment:
+      MOODLE_URL: https://edvera.tech
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:?set_db_password}
+    volumes:
+      - moodle_data:/var/moodledata
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - '80'
+    mem_limit: 850m
+
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    command: --innodb-buffer-pool-size=128M --max-connections=30 --performance-schema=OFF
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set_root_password}
+      MARIADB_DATABASE: moodle
+      MARIADB_USER: moodle
+      MARIADB_PASSWORD: ${MOODLE_DB_PASSWORD:?set_db_password}
+    volumes:
+      - maria_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    mem_limit: 500m
+
+  cron:
+    build: .
+    restart: unless-stopped
+    user: www-data
+    command: ["/bin/sh", "-c", "while true; do php /var/www/html/admin/cli/cron.php; sleep 60; done"]
+    environment:
+      MOODLE_URL: https://edvera.tech
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:?set_db_password}
+    volumes:
+      - moodle_data:/var/moodledata
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 220m
+
+volumes:
+  moodle_data:
+  maria_data:
